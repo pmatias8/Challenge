@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Macros de Faturamento</title>
+<meta name="description" content="Roda as macros de vendas VMpay da planilha de faturamento no celular e no iPad.">
+<meta name="theme-color" content="#1f6f5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Macros">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icone-180.png">
+<link rel="stylesheet" href="estilo.css">
+<script src="js/vendor/jszip.min.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="topo">
+  <div>
+    <h1>Macros de Faturamento</h1>
+    <p class="sub">Vendas VMpay → aba Diário</p>
+  </div>
+  <button id="btnConfig" class="icone-btn" aria-label="Configurações" title="Configurações">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3.5h-4l-.4 2.5a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.4 2.5h4l.4-2.5c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6ZM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" transform="translate(-1 0)"/></svg>
+  </button>
+</header>
+
+<main>
+  <div id="avisoModo" class="faixa" hidden></div>
+
+  <!-- 1. Planilha -->
+  <section class="cartao">
+    <h2><span class="num">1</span> Planilha</h2>
+    <label class="btn primario largo" for="arquivo">Abrir planilha (.xlsx / .xlsm)</label>
+    <input id="arquivo" type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" hidden>
+    <div id="infoPlanilha" class="info vazio">Nenhuma planilha aberta. No iPad/Android dá para escolher direto do OneDrive pelo seletor de arquivos.</div>
+    <p class="dica" id="dicaExemplo">Sem a planilha aqui? <a href="exemplo/Faturamento-exemplo.xlsx" download>Baixe a planilha de exemplo</a> e use o modo demonstração (⚙︎).</p>
+  </section>
+
+  <!-- 2. Atualizar -->
+  <section class="cartao" id="secAtualizar" data-precisa-planilha>
+    <h2><span class="num">2</span> Atualizar vendas da API</h2>
+    <p class="explica">Soma as vendas de cada dia (dia de Brasília) e grava em <b>Realizado</b> (coluna E) da aba Diário. Guarda tudo na aba <b>Vendas API</b>.</p>
+    <div class="linha2">
+      <label>Início<input type="date" id="dtIni"></label>
+      <label>Fim<input type="date" id="dtFim"></label>
+    </div>
+    <div id="avisoPeriodo" class="avisos"></div>
+    <label class="opcao" id="optSobrescrever" hidden>
+      <input type="checkbox" id="sobrescrever">
+      <span><b>Substituir</b> os dias que já têm valor em Realizado<br><small>Desmarcado = manter o que está (a aba Vendas API mostra a diferença para você conferir)</small></span>
+    </label>
+    <button class="btn primario largo" id="btnAtualizar">Atualizar vendas</button>
+    <div id="resAtualizar"></div>
+  </section>
+
+  <!-- 3. Conferir -->
+  <section class="cartao" id="secConferir" data-precisa-planilha>
+    <h2><span class="num">3</span> Conferir vendas por loja</h2>
+    <p class="explica">Total de um dia, loja a loja, inclusive as lojas que o filtro tira da conta.</p>
+    <div class="linha2">
+      <label>Dia<input type="date" id="dtConf"></label>
+      <button class="btn" id="btnConferir">Conferir</button>
+    </div>
+    <div id="resConferir"></div>
+  </section>
+
+  <!-- 4. Diagnóstico -->
+  <details class="cartao" id="secDiag">
+    <summary><h2><span class="num">4</span> Diagnóstico da API</h2></summary>
+    <p class="explica">Mostra a resposta crua das 5 primeiras vendas de um dia. Serve para testar o token e o proxy.</p>
+    <div class="linha2">
+      <label>Dia<input type="date" id="dtDiag"></label>
+      <button class="btn" id="btnDiag">Consultar</button>
+    </div>
+    <pre id="resDiag" class="cru" hidden></pre>
+  </details>
+</main>
+
+<!-- barra de salvar -->
+<div id="barraSalvar" class="barra" hidden>
+  <span id="txtSalvar">Planilha alterada</span>
+  <div class="barra-botoes">
+    <button class="btn" id="btnBaixar">Baixar</button>
+    <button class="btn primario" id="btnCompartilhar">Salvar / Abrir no Excel</button>
+  </div>
+</div>
+
+<!-- configurações -->
+<dialog id="dlgConfig">
+  <form method="dialog" class="dlg">
+    <h2>Configurações</h2>
+    <label>Token de acesso da VMpay (access_token)
+      <input type="password" id="cfgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cole aqui">
+    </label>
+    <label class="opcao inline"><input type="checkbox" id="cfgMostrar"> mostrar</label>
+    <p class="dica">Fica salvo só neste aparelho, como a macro faz no Windows.</p>
+    <label>Endereço do proxy
+      <input type="url" id="cfgProxy" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://vmpay-proxy.SEU-USUARIO.workers.dev">
+    </label>
+    <p class="dica">A API da VMpay não aceita chamadas vindas de navegador (CORS). O proxy (Cloudflare Worker, grátis) repassa a chamada. Veja o guia no repositório.</p>
+    <label class="opcao"><input type="checkbox" id="cfgDemo"> <span><b>Modo demonstração</b><br><small>Usa vendas inventadas, sem token e sem proxy</small></span></label>
+    <div class="dlg-botoes">
+      <button class="btn" value="cancelar" formnovalidate>Cancelar</button>
+      <button class="btn primario" value="salvar" id="cfgSalvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- pergunta genérica (substitui MsgBox) -->
+<dialog id="dlgPergunta">
+  <form method="dialog" class="dlg">
+    <h2 id="pgTitulo"></h2>
+    <div id="pgTexto" class="pg-texto"></div>
+    <div class="dlg-botoes" id="pgBotoes"></div>
+  </form>
+</dialog>
+</body>
+</html>
