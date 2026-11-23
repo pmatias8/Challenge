@@ -1,6 +1,6 @@
 // Guarda os arquivos do app para abrir mesmo sem internet.
 // (As consultas à API sempre vão para a rede.)
-const VERSAO = "macros-v1";
+const VERSAO = "macros-v2";
 const ARQUIVOS = ["./", "index.html", "estilo.css", "manifest.webmanifest", "icone.svg", "icone-180.png",
   "js/app.js", "js/xlsx.js", "js/vendas.js", "js/macros.js", "js/demo.js", "js/vendor/jszip.min.js"];
 

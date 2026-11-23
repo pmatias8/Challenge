@@ -1,5 +1,5 @@
 import { Pasta } from "./xlsx.js";
-import { API_VMPAY, formatarData, serialParaISO, isoParaSerial, hojeSerial } from "./vendas.js";
+import { API_VMPAY, formatarData, serialParaISO, isoParaSerial, hojeSerial, limparToken, resumoToken } from "./vendas.js";
 import * as M from "./macros.js";
 import { fetchDemo } from "./demo.js";
 
@@ -14,7 +14,7 @@ const guardar = {
   gravar(k, v) { try { localStorage.setItem(k, v); } catch { /* modo privado */ } },
 };
 const cfg = {
-  get token() { return guardar.ler("vmpay_token").trim(); },
+  get token() { return limparToken(guardar.ler("vmpay_token")); },
   get proxy() { return guardar.ler("vmpay_proxy").trim(); },
   get demo() { return guardar.ler("vmpay_demo") === "1"; },
 };
@@ -66,7 +66,12 @@ function marcarAlterada() {
 }
 function erro(alvo, e) {
   console.error(e);
-  $(alvo).innerHTML = `<div class="erro">Erro: ${esc(e && e.message ? e.message : e)}\n\nNenhum valor foi alterado.</div>`;
+  const msg = String(e && e.message ? e.message : e);
+  const dica = /recusou o token/.test(msg)
+    ? `\n\nToken usado: ${resumoToken(cfg.token)}. Confira em ⚙︎ se é o mesmo que funcionou no navegador ` +
+      `(cole só o token, sem "&page=..."). Proxy: ${baseApi()}`
+    : "";
+  $(alvo).innerHTML = `<div class="erro">Erro: ${esc(msg)}${esc(dica)}\n\nNenhum valor foi alterado.</div>`;
 }
 function progresso(alvo, txt, frac) {
   $(alvo).innerHTML = `<div class="progresso">${esc(txt)}<div class="trilho"><div class="barra-p" style="width:${Math.round(frac * 100)}%"></div></div></div>`;
@@ -211,11 +216,11 @@ async function rodarDiag() {
   const dia = isoParaSerial($("dtDiag").value);
   if (dia === null) return avisar("Data inválida", "Escolha o dia.");
   if (!precisaApi()) return;
-  const pre = $("resDiag"); pre.hidden = false; pre.textContent = "Consultando…";
+  const pre = $("resDiag"); pre.hidden = false; pre.textContent = `Consultando… (token: ${resumoToken(cfg.token)}; proxy: ${baseApi()})`;
   try {
     const dados = await M.diagnosticar({ token: cfg.token, base: baseApi(), dia, fetchImpl });
     pre.textContent = `Resposta de /vends (5 primeiras vendas de ${formatarData(dia)}):\n\n` + JSON.stringify(dados, null, 2);
-  } catch (e) { pre.textContent = "Erro: " + (e.message || e); }
+  } catch (e) { pre.textContent = `Erro: ${e.message || e}\n\nToken usado: ${resumoToken(cfg.token)}\nProxy: ${baseApi()}`; }
 }
 
 // ---------- salvar ----------
@@ -247,17 +252,19 @@ async function compartilhar() {
 // ---------- configurações ----------
 function abrirConfig() {
   $("cfgToken").value = cfg.token; $("cfgProxy").value = cfg.proxy; $("cfgDemo").checked = cfg.demo;
-  $("cfgToken").type = "password"; $("cfgMostrar").checked = false;
+  $("cfgToken").classList.add("mascara"); $("cfgMostrar").checked = false;
+  $("cfgResumo").textContent = "Salvo agora: " + resumoToken(cfg.token);
   $("dlgConfig").showModal();
 }
 $("dlgConfig").addEventListener("close", () => {
   if ($("dlgConfig").returnValue !== "salvar") return;
-  guardar.gravar("vmpay_token", $("cfgToken").value.trim());
+  guardar.gravar("vmpay_token", limparToken($("cfgToken").value));
   guardar.gravar("vmpay_proxy", $("cfgProxy").value.trim());
   guardar.gravar("vmpay_demo", $("cfgDemo").checked ? "1" : "0");
   atualizarModo();
 });
-$("cfgMostrar").addEventListener("change", (e) => { $("cfgToken").type = e.target.checked ? "text" : "password"; });
+$("cfgMostrar").addEventListener("change", (e) => { $("cfgToken").classList.toggle("mascara", !e.target.checked); });
+$("cfgToken").addEventListener("input", () => { $("cfgResumo").textContent = "Vai salvar: " + resumoToken(limparToken($("cfgToken").value)); });
 
 // ---------- eventos ----------
 $("btnConfig").addEventListener("click", abrirConfig);

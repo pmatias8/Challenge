@@ -92,10 +92,11 @@
   <form method="dialog" class="dlg">
     <h2>Configurações</h2>
     <label>Token de acesso da VMpay (access_token)
-      <input type="password" id="cfgToken" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="cole aqui">
+      <input type="text" id="cfgToken" class="mascara" name="vmpay-token-api" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="cole aqui">
     </label>
     <label class="opcao inline"><input type="checkbox" id="cfgMostrar"> mostrar</label>
-    <p class="dica">Fica salvo só neste aparelho, como a macro faz no Windows.</p>
+    <p class="dica" id="cfgResumo"></p>
+    <p class="dica">Cole só o token (se colar o endereço de teste inteiro, o app separa o token sozinho). Fica salvo só neste aparelho, como a macro faz no Windows.</p>
     <label>Endereço do proxy
       <input type="url" id="cfgProxy" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://vmpay-proxy.SEU-USUARIO.workers.dev">
     </label>

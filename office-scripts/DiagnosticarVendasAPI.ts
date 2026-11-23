@@ -24,7 +24,7 @@ const LOTE = 8;                 // páginas pedidas em paralelo
 
 
 async function main(workbook: ExcelScript.Workbook, dia?: string, token?: string): Promise<string> {
-  const tk = (token || TOKEN_VMPAY || "").trim();
+  const tk = limparToken(token || TOKEN_VMPAY || "");
   if (!tk) throw new Error("Falta o token da VMpay: preencha o campo 'token' ou a constante TOKEN_VMPAY no script.");
   if (API_BASE.indexOf("SEU-USUARIO") >= 0) throw new Error("Configure API_BASE no topo do script com o endereço do seu proxy.");
   const d = dia && dia.trim() ? converterData(dia) : hojeSerial() - 1;
@@ -194,6 +194,16 @@ function lerFiltro(wb: ExcelScript.Workbook): Set<string> {
 function acharAba(wb: ExcelScript.Workbook, nome: string): ExcelScript.Worksheet | undefined {
   const alvo = nome.toLowerCase();
   return wb.getWorksheets().find((w) => w.getName().toLowerCase() === alvo);
+}
+
+/** Aceita o token puro, "access_token=..." ou o endereço de teste inteiro. */
+function limparToken(s: string): string {
+  let t = s.trim();
+  const i = t.indexOf("access_token=");
+  if (i >= 0) t = t.substring(i + "access_token=".length);
+  t = t.split(/[&\s]/)[0].replace(/^["'<]+|["'>]+$/g, "");
+  if (/%[0-9a-fA-F]{2}/.test(t)) { try { t = decodeURIComponent(t); } catch (e) { /* mantém */ } }
+  return t;
 }
 
 function txt(v: string | number | boolean | null | undefined): string {

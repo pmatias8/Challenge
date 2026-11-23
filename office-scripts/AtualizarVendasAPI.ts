@@ -61,7 +61,7 @@ async function main(
   const ws = acharAba(workbook, ABA_PROJ);
   if (!ws) throw new Error(`Abra a planilha de faturamento (aba '${ABA_PROJ}') antes de rodar.`);
 
-  const tk = (token || TOKEN_VMPAY || "").trim();
+  const tk = limparToken(token || TOKEN_VMPAY || "");
   if (!tk) throw new Error("Falta o token da VMpay: preencha o campo 'token' ou a constante TOKEN_VMPAY no script.");
   if (API_BASE.indexOf("SEU-USUARIO") >= 0) throw new Error("Configure API_BASE no topo do script com o endereço do seu proxy.");
 
@@ -351,6 +351,16 @@ function lerFiltro(wb: ExcelScript.Workbook): Set<string> {
 function acharAba(wb: ExcelScript.Workbook, nome: string): ExcelScript.Worksheet | undefined {
   const alvo = nome.toLowerCase();
   return wb.getWorksheets().find((w) => w.getName().toLowerCase() === alvo);
+}
+
+/** Aceita o token puro, "access_token=..." ou o endereço de teste inteiro. */
+function limparToken(s: string): string {
+  let t = s.trim();
+  const i = t.indexOf("access_token=");
+  if (i >= 0) t = t.substring(i + "access_token=".length);
+  t = t.split(/[&\s]/)[0].replace(/^["'<]+|["'>]+$/g, "");
+  if (/%[0-9a-fA-F]{2}/.test(t)) { try { t = decodeURIComponent(t); } catch (e) { /* mantém */ } }
+  return t;
 }
 
 function txt(v: string | number | boolean | null | undefined): string {

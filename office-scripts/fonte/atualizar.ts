@@ -48,7 +48,7 @@ async function main(
   const ws = acharAba(workbook, ABA_PROJ);
   if (!ws) throw new Error(`Abra a planilha de faturamento (aba '${ABA_PROJ}') antes de rodar.`);
 
-  const tk = (token || TOKEN_VMPAY || "").trim();
+  const tk = limparToken(token || TOKEN_VMPAY || "");
   if (!tk) throw new Error("Falta o token da VMpay: preencha o campo 'token' ou a constante TOKEN_VMPAY no script.");
   if (API_BASE.indexOf("SEU-USUARIO") >= 0) throw new Error("Configure API_BASE no topo do script com o endereço do seu proxy.");
 

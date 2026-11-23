@@ -142,6 +142,16 @@ function acharAba(wb: ExcelScript.Workbook, nome: string): ExcelScript.Worksheet
   return wb.getWorksheets().find((w) => w.getName().toLowerCase() === alvo);
 }
 
+/** Aceita o token puro, "access_token=..." ou o endereço de teste inteiro. */
+function limparToken(s: string): string {
+  let t = s.trim();
+  const i = t.indexOf("access_token=");
+  if (i >= 0) t = t.substring(i + "access_token=".length);
+  t = t.split(/[&\s]/)[0].replace(/^["'<]+|["'>]+$/g, "");
+  if (/%[0-9a-fA-F]{2}/.test(t)) { try { t = decodeURIComponent(t); } catch (e) { /* mantém */ } }
+  return t;
+}
+
 function txt(v: string | number | boolean | null | undefined): string {
   return v === null || v === undefined ? "" : String(v);
 }

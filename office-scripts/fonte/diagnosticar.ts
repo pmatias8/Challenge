@@ -11,7 +11,7 @@
 //@@COMUM_CONFIG@@
 
 async function main(workbook: ExcelScript.Workbook, dia?: string, token?: string): Promise<string> {
-  const tk = (token || TOKEN_VMPAY || "").trim();
+  const tk = limparToken(token || TOKEN_VMPAY || "");
   if (!tk) throw new Error("Falta o token da VMpay: preencha o campo 'token' ou a constante TOKEN_VMPAY no script.");
   if (API_BASE.indexOf("SEU-USUARIO") >= 0) throw new Error("Configure API_BASE no topo do script com o endereço do seu proxy.");
   const d = dia && dia.trim() ? converterData(dia) : hojeSerial() - 1;

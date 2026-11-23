@@ -73,6 +73,26 @@ export function janelaDiaUTC(dia) {
   return { ini: formatarDataHora(ini), fim: formatarDataHora(fim) };
 }
 
+// ---------- token ----------
+
+/**
+ * Limpa o que foi colado como token: aceita o token puro, "access_token=..."
+ * ou até o endereço inteiro de teste, e tira aspas, espaços e "&page=..." do fim.
+ */
+export function limparToken(s) {
+  let t = String(s ?? "").trim();
+  const i = t.indexOf("access_token=");
+  if (i >= 0) t = t.slice(i + "access_token=".length);
+  t = t.split(/[&\s]/)[0].replace(/^["'<]+|["'>]+$/g, "");
+  try { if (/%[0-9a-f]{2}/i.test(t)) t = decodeURIComponent(t); } catch { /* deixa como está */ }
+  return t;
+}
+
+/** "18 caracteres, termina em …f3a9" — para conferir sem mostrar o token. */
+export function resumoToken(t) {
+  return t ? `${t.length} caracteres, termina em …${t.slice(-4)}` : "nenhum token salvo";
+}
+
 // ---------- texto ----------
 
 const ACENTOS = { "á": "a", "à": "a", "ã": "a", "â": "a", "ä": "a", "é": "e", "ê": "e", "è": "e", "ë": "e",
