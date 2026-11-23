@@ -80,6 +80,24 @@ Abra o endereço acima.
    - No iPad: escolha **Salvar em Arquivos → OneDrive** e substitua o arquivo, ou abra direto no Excel.
    - No Android: escolha o OneDrive ou o Excel.
 
+### Salvar direto na planilha original (OneDrive / SharePoint)
+Assim o app abre a planilha **original**, roda a atualização e **grava no mesmo arquivo sozinho**, sem baixar e sem copiar. Para isso, ele precisa da sua permissão para acessar o OneDrive. A Microsoft exige que o app seja **cadastrado uma vez**, num passo parecido com o do proxy (uns 5 minutos):
+
+1. Entre em <https://entra.microsoft.com> com a **mesma conta onde está a planilha**. Se a planilha está numa conta Microsoft pessoal, use <https://portal.azure.com>.
+2. Vá em **Aplicativos → Registros de aplicativo → Novo registro**.
+   - **Nome:** `Macros Faturamento`
+   - **Tipos de conta com suporte:** *Contas em qualquer diretório organizacional e contas Microsoft pessoais*
+   - **URI de redirecionamento:** escolha **Aplicativo de página única (SPA)** e digite `https://pmatias8.github.io/Challenge/` (com a barra no final)
+   - Clique em **Registrar**.
+3. Copie o **ID do aplicativo (cliente)**.
+4. No app, abra ⚙︎ → **Conta Microsoft**, cole o ID e clique em **Salvar**. Depois toque em **Abrir do OneDrive / SharePoint** e entre com a sua conta. Na primeira vez, a Microsoft pede para você **permitir o acesso aos arquivos**.
+5. Escolha a planilha na lista de recentes ou cole o link dela (no Excel: **Compartilhar → Copiar link**). Da próxima vez, aparece o botão **Abrir Faturamento.xlsm**.
+
+Depois de **Atualizar vendas** ou **Conferir**, aparece **"✓ Salvo na planilha original"**.
+- **Proteção contra sobrescrever:** se a planilha foi alterada em outro lugar depois que o app a abriu, o app **não salva** e avisa. Abra de novo e rode outra vez.
+- **Se aparecer "Precisa da aprovação do administrador"** (ou se não deixar fazer o registro), a TI da empresa bloqueou esse tipo de acesso. Peça para eles aprovarem o aplicativo, ou use a opção 2 (Office Scripts), que também grava direto na original.
+- Feche a planilha no computador do trabalho antes de atualizar pelo app. Se o Excel de lá estiver com ela aberta e alterada, pode surgir conflito de versões.
+
 **O que o app preserva:** ele não recria a planilha. Abre o arquivo e altera **só as células que a macro altera**. As **macros VBA continuam dentro do .xlsm**, junto com gráficos, formatação e fórmulas, e o Excel recalcula tudo ao abrir. Por isso a mesma planilha continua funcionando no computador do trabalho.
 
 **Cuidado:** não edite a mesma planilha em outro lugar enquanto usa o app. O arquivo salvo pelo app substitui o do OneDrive.
@@ -100,6 +118,7 @@ soffice --headless --calc --convert-to xlsx --outdir /tmp/lo /tmp/f.xlsx
 python3 testes/injetar_vba.py /tmp/lo/f.xlsx /tmp/teste.xlsm
 # app no navegador (Playwright) + conferência do arquivo baixado
 node testes/teste_app.cjs /tmp/teste.xlsm /tmp/saida
+node testes/teste_onedrive.cjs /tmp/teste.xlsm /tmp/saida   # OneDrive simulado
 python3 testes/verificar_saida.py /tmp/teste.xlsm /tmp/saida/saida.xlsm /tmp/saida/esperado.json /tmp/saida/lo
 # Office Scripts numa pasta simulada (precisa do pacote typescript)
 node office-scripts/montar.mjs

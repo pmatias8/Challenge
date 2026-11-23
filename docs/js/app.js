@@ -2,6 +2,7 @@ import { Pasta } from "./xlsx.js";
 import { API_VMPAY, formatarData, serialParaISO, isoParaSerial, hojeSerial, limparToken, resumoToken } from "./vendas.js";
 import * as M from "./macros.js";
 import { fetchDemo } from "./demo.js";
+import * as OD from "./onedrive.js";
 
 const $ = (id) => document.getElementById(id);
 const brl = (v) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -17,6 +18,7 @@ const cfg = {
   get token() { return limparToken(guardar.ler("vmpay_token")); },
   get proxy() { return guardar.ler("vmpay_proxy").trim(); },
   get demo() { return guardar.ler("vmpay_demo") === "1"; },
+  get ms() { return { clientId: guardar.ler("ms_client").trim(), tenant: guardar.ler("ms_tenant").trim() }; },
 };
 function baseApi() {
   if (cfg.demo) return "https://demo.local/api/v1";
@@ -27,6 +29,8 @@ const fetchImpl = (...a) => (cfg.demo ? fetchDemo(...a) : fetch(...a));
 
 // ---------- estado ----------
 let pasta = null, info = null, nomeArquivo = "", tipoArquivo = "", alterada = false, ocupado = false;
+let origem = null;      // null = arquivo do aparelho; { ref, eTag, webUrl } = planilha original no OneDrive
+let contaMs = null;
 
 // ---------- perguntas (substituem MsgBox / InputBox) ----------
 function perguntar(titulo, html, botoes) {
@@ -63,6 +67,9 @@ function marcarAlterada() {
   alterada = true;
   $("barraSalvar").hidden = false;
   $("txtSalvar").textContent = `${nomeArquivo} alterada`;
+  $("btnSalvarOriginal").hidden = !origem;
+  $("btnCompartilhar").hidden = !!origem;
+  $("btnBaixar").textContent = origem ? "Baixar cópia" : "Baixar";
 }
 function erro(alvo, e) {
   console.error(e);
@@ -86,7 +93,8 @@ function mostrarInfo() {
   const n = info.linhaDia.size;
   $("infoPlanilha").className = "info";
   $("infoPlanilha").innerHTML =
-    `<b>${esc(nomeArquivo)}</b><br>Aba Diário: ${formatarData(info.primDia)} a ${formatarData(info.ultDia)} · ` +
+    `<b>${esc(nomeArquivo)}</b>` + (origem ? ` <span class="tag">OneDrive · salva na original</span>` : ` <span class="tag manteve">cópia do aparelho</span>`) +
+    `<br>Aba Diário: ${formatarData(info.primDia)} a ${formatarData(info.ultDia)} · ` +
     `${info.preenchidos} de ${n} dias com Realizado` +
     (info.primVazio ? `<br>Primeiro dia vazio: <b>${formatarData(info.primVazio)}</b>` : "");
   $("dtIni").value = serialParaISO(info.sugIni);
@@ -113,22 +121,30 @@ function verificar() {
   return { ini, fim, ...v };
 }
 
-async function abrirArquivo(arq) {
+async function abrirBytes(buf, nome, novaOrigem) {
   try {
-    const buf = await arq.arrayBuffer();
     const p = await Pasta.abrir(buf);
     const i = await M.analisar(p);
-    pasta = p; info = i; nomeArquivo = arq.name; tipoArquivo = arq.type; alterada = false;
+    pasta = p; info = i; nomeArquivo = nome; alterada = false; origem = novaOrigem;
     $("barraSalvar").hidden = true;
     $("resAtualizar").innerHTML = ""; $("resConferir").innerHTML = "";
     $("dicaExemplo").hidden = true;
+    $("odLista").innerHTML = "";
     mostrarInfo();
   } catch (e) {
-    pasta = info = null;
+    pasta = info = null; origem = null;
     $("infoPlanilha").className = "info";
     $("infoPlanilha").innerHTML = `<div class="erro" style="margin:0">${esc(e.message || e)}</div>`;
   }
   habilitar();
+}
+async function abrirArquivo(arq) {
+  if (alterada && !(await confirmarDescartar())) return;
+  await abrirBytes(await arq.arrayBuffer(), arq.name, null);
+}
+async function confirmarDescartar() {
+  return (await perguntar("Alterações não salvas", "A planilha aberta tem alterações que ainda não foram salvas. Abrir outra mesmo assim?",
+    [{ texto: "Cancelar", valor: "nao" }, { texto: "Abrir outra", valor: "sim", primario: true }])) === "sim";
 }
 
 // ---------- 2. Atualizar vendas ----------
@@ -174,6 +190,7 @@ async function rodarAtualizar() {
         $("resAtualizar").insertAdjacentHTML("beforeend", `<div class="ok">Painel!D7 atualizado para ${int(res.ticket.estimado)} cupons.</div>`);
       }
     }
+    if (origem) await salvarOriginal("resAtualizar");
   } catch (e) { erro("resAtualizar", e); }
   ocupado = false; habilitar();
 }
@@ -207,6 +224,7 @@ async function rodarConferir() {
       `<span>Vendas com valor zero (brinde/troca)</span><span>${int(res.zeradas)}</span></div>` +
       `<p class="dica">Também gravado na aba "${M.ABA_CONF}". Linhas em laranja = fora da conta pelo filtro.</p>`;
     $("resConferir").innerHTML = html;
+    if (origem) await salvarOriginal("resConferir");
   } catch (e) { erro("resConferir", e); }
   ocupado = false; habilitar();
 }
@@ -237,7 +255,7 @@ async function baixar() {
   const a = document.createElement("a"); a.href = url; a.download = f.name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
-  salva();
+  if (!origem) salva();
 }
 function salva() { alterada = false; $("txtSalvar").textContent = `${nomeArquivo} salva ✓`; }
 async function compartilhar() {
@@ -249,11 +267,107 @@ async function compartilhar() {
   await baixar();
 }
 
+// ---------- OneDrive / SharePoint ----------
+async function salvarOriginal(alvo) {
+  if (!origem) return;
+  const caixa = alvo ? $(alvo) : null;
+  const status = document.createElement("div");
+  status.className = "progresso"; status.textContent = `Salvando na planilha original (${nomeArquivo})…`;
+  if (caixa) caixa.appendChild(status);
+  $("btnSalvarOriginal").disabled = true;
+  try {
+    const bytes = await pasta.gerar("uint8array");
+    const r = await OD.salvar(cfg.ms, origem.ref, bytes, origem.eTag);
+    origem.eTag = r.eTag;
+    alterada = false;
+    const hora = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    $("txtSalvar").textContent = `Salva na original ✓ ${hora}`;
+    $("barraSalvar").hidden = true; // já está salvo; a barra volta se algo mudar
+    status.className = "ok";
+    status.innerHTML = `✓ <b>Salvo na planilha original</b> (${esc(nomeArquivo)}) às ${hora}.` +
+      (origem.webUrl ? ` <a href="${esc(origem.webUrl)}" target="_blank" rel="noopener">Abrir no Excel</a>` : "");
+    if (!caixa) avisar("Salvo", status.innerHTML);
+  } catch (e) {
+    status.className = "erro";
+    status.textContent = "Não salvou na planilha original: " + (e.message || e) + "\n\nAs vendas foram calculadas; você pode tentar salvar de novo pela barra de baixo ou baixar uma cópia.";
+    if (!caixa) avisar("Não salvou", esc(status.textContent));
+  }
+  $("btnSalvarOriginal").disabled = false;
+}
+
+function ultimaRef() { try { return JSON.parse(guardar.ler("od_ultima") || "null"); } catch { return null; } }
+
+function mostrarUltima() {
+  const u = ultimaRef();
+  $("odUltima").innerHTML = u
+    ? `<button class="btn primario largo" id="btnOdUltima">Abrir ${esc(u.nome)}</button>`
+    : "";
+  if (u) $("btnOdUltima").addEventListener("click", () => abrirDoOneDrive(u));
+  $("btnOneDrive").textContent = u ? "Escolher outra no OneDrive / SharePoint" : "Abrir do OneDrive / SharePoint";
+  $("btnOneDrive").classList.toggle("primario", !u);
+}
+
+async function abrirDoOneDrive(ref) {
+  if (alterada && !(await confirmarDescartar())) return;
+  ocupado = true; habilitar();
+  $("infoPlanilha").className = "info"; $("infoPlanilha").textContent = `Baixando ${ref.nome} do OneDrive…`;
+  try {
+    const d = await OD.baixar(cfg.ms, ref);
+    guardar.gravar("od_ultima", JSON.stringify({ ...ref, nome: d.nome }));
+    await abrirBytes(d.bytes, d.nome, { ref, eTag: d.eTag, webUrl: d.webUrl });
+    mostrarUltima();
+  } catch (e) {
+    $("infoPlanilha").innerHTML = `<div class="erro" style="margin:0">${esc(e.message || e)}</div>`;
+  }
+  ocupado = false; habilitar();
+}
+
+async function escolherNoOneDrive() {
+  if (!cfg.ms.clientId) {
+    return avisar("Conectar ao OneDrive", "Para abrir e salvar a planilha original, cole o <b>ID do aplicativo Microsoft</b> em ⚙︎ → Conta Microsoft. O guia explica como criar (uns 5 minutos, uma vez só).");
+  }
+  if (!contaMs) { try { contaMs = await OD.conta(cfg.ms); } catch { /* segue para o login */ } }
+  if (!contaMs && !globalThis.__TOKEN_TESTE__) {
+    try { sessionStorage.setItem("od_depois_login", "1"); } catch { /* ok */ }
+    return OD.entrar(cfg.ms);
+  }
+  const lista = $("odLista");
+  lista.innerHTML = `<div class="progresso">Buscando planilhas recentes…</div>`;
+  let itens = [];
+  try { itens = await OD.recentes(cfg.ms); } catch (e) { lista.innerHTML = `<div class="erro">${esc(e.message || e)}</div>`; }
+  let html = `<div class="lista-od">`;
+  if (itens.length) {
+    html += `<p class="dica">Planilhas recentes:</p>`;
+    itens.forEach((it, i) => { html += `<button class="btn item-od" data-i="${i}"><b>${esc(it.nome)}</b><small>${esc(it.local || "")}</small></button>`; });
+  } else if (!lista.querySelector(".erro")) html += `<p class="dica">Nenhuma planilha recente encontrada.</p>`;
+  html += `<label>Ou cole o link da planilha (no Excel/OneDrive: Compartilhar → Copiar link)
+      <input type="url" id="odLink" placeholder="https://…sharepoint.com/…  ou  https://1drv.ms/…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="btn" id="btnOdLink">Abrir pelo link</button></div>`;
+  if (!lista.querySelector(".erro")) lista.innerHTML = html; else lista.insertAdjacentHTML("beforeend", html);
+  lista.querySelectorAll(".item-od").forEach((b) => b.addEventListener("click", () => abrirDoOneDrive(itens[+b.dataset.i])));
+  $("btnOdLink").addEventListener("click", async () => {
+    const link = $("odLink").value.trim();
+    if (!link) return;
+    try { await abrirDoOneDrive(await OD.porLink(cfg.ms, link)); }
+    catch (e) { lista.insertAdjacentHTML("beforeend", `<div class="erro">${esc(e.message || e)}</div>`); }
+  });
+}
+
+function mostrarConta() {
+  $("cfgConta").textContent = !cfg.ms.clientId ? "Sem ID do aplicativo: só dá para abrir arquivos do aparelho."
+    : contaMs ? `Conectado como ${contaMs.username}` : "Não conectado.";
+  $("cfgEntrar").hidden = !cfg.ms.clientId || !!contaMs;
+  $("cfgSair").hidden = !contaMs;
+}
+
 // ---------- configurações ----------
 function abrirConfig() {
   $("cfgToken").value = cfg.token; $("cfgProxy").value = cfg.proxy; $("cfgDemo").checked = cfg.demo;
   $("cfgToken").classList.add("mascara"); $("cfgMostrar").checked = false;
   $("cfgResumo").textContent = "Salvo agora: " + resumoToken(cfg.token);
+  $("cfgClient").value = cfg.ms.clientId; $("cfgTenant").value = cfg.ms.tenant;
+  $("cfgRedirect").textContent = OD.enderecoRetorno();
+  mostrarConta();
   $("dlgConfig").showModal();
 }
 $("dlgConfig").addEventListener("close", () => {
@@ -261,8 +375,18 @@ $("dlgConfig").addEventListener("close", () => {
   guardar.gravar("vmpay_token", limparToken($("cfgToken").value));
   guardar.gravar("vmpay_proxy", $("cfgProxy").value.trim());
   guardar.gravar("vmpay_demo", $("cfgDemo").checked ? "1" : "0");
+  guardarMs();
   atualizarModo();
 });
+function guardarMs() {
+  guardar.gravar("ms_client", $("cfgClient").value.trim());
+  guardar.gravar("ms_tenant", $("cfgTenant").value.trim());
+}
+$("cfgEntrar").addEventListener("click", async (e) => {
+  e.preventDefault(); guardarMs();
+  try { await OD.entrar(cfg.ms); } catch (err) { $("cfgConta").textContent = err.message || err; }
+});
+$("cfgSair").addEventListener("click", async (e) => { e.preventDefault(); try { await OD.sair(cfg.ms); } catch { /* ok */ } });
 $("cfgMostrar").addEventListener("change", (e) => { $("cfgToken").classList.toggle("mascara", !e.target.checked); });
 $("cfgToken").addEventListener("input", () => { $("cfgResumo").textContent = "Vai salvar: " + resumoToken(limparToken($("cfgToken").value)); });
 
@@ -276,9 +400,19 @@ $("btnConferir").addEventListener("click", rodarConferir);
 $("btnDiag").addEventListener("click", rodarDiag);
 $("btnBaixar").addEventListener("click", baixar);
 $("btnCompartilhar").addEventListener("click", compartilhar);
+$("btnSalvarOriginal").addEventListener("click", () => salvarOriginal(null));
+$("btnOneDrive").addEventListener("click", escolherNoOneDrive);
 window.addEventListener("beforeunload", (e) => { if (alterada) { e.preventDefault(); e.returnValue = ""; } });
 
 $("dtDiag").value = serialParaISO(hojeSerial() - 1);
 atualizarModo();
 habilitar();
+mostrarUltima();
+// volta do login da Microsoft
+OD.concluirLogin(cfg.ms).then((c) => {
+  contaMs = c;
+  let depois = false;
+  try { depois = sessionStorage.getItem("od_depois_login") === "1"; sessionStorage.removeItem("od_depois_login"); } catch { /* ok */ }
+  if (c && depois) escolherNoOneDrive();
+}).catch((e) => { console.warn("login Microsoft:", e); });
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});

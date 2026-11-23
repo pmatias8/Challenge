@@ -122,3 +122,12 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 @media (max-width: 380px) { .linha2 { grid-template-columns: 1fr; } }
 input.mascara { -webkit-text-security: disc; text-security: disc; }
+.btn.secundario { margin-top: 10px; font-weight: 500; color: var(--suave); }
+#odUltima:not(:empty) { margin-bottom: 10px; }
+.lista-od { display: grid; gap: 8px; margin-top: 12px; }
+.item-od { flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; min-height: 0; padding: 10px 14px; }
+.item-od small { color: var(--suave); font-weight: 400; word-break: break-all; }
+.dlg h3.sec { font-size: .95rem; margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--borda); }
+.dlg h3.sec small, label small { font-weight: 400; color: var(--suave); }
+.dlg code { word-break: break-all; font-size: .82rem; background: var(--fundo); padding: 1px 4px; border-radius: 4px; }
+dialog { max-height: calc(100dvh - 32px); overflow: auto; }

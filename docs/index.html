@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="icone-180.png">
 <link rel="stylesheet" href="estilo.css">
 <script src="js/vendor/jszip.min.js"></script>
+<script src="js/vendor/msal-browser.min.js"></script>
 <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -32,9 +33,12 @@
   <!-- 1. Planilha -->
   <section class="cartao">
     <h2><span class="num">1</span> Planilha</h2>
-    <label class="btn primario largo" for="arquivo">Abrir planilha (.xlsx / .xlsm)</label>
+    <div id="odUltima"></div>
+    <button class="btn primario largo" id="btnOneDrive">Abrir do OneDrive / SharePoint</button>
+    <div id="odLista"></div>
+    <label class="btn largo secundario" for="arquivo">Abrir arquivo do aparelho (salva uma cópia)</label>
     <input id="arquivo" type="file" accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" hidden>
-    <div id="infoPlanilha" class="info vazio">Nenhuma planilha aberta. No iPad/Android dá para escolher direto do OneDrive pelo seletor de arquivos.</div>
+    <div id="infoPlanilha" class="info vazio">Nenhuma planilha aberta. Abrindo pelo OneDrive/SharePoint, o app grava as vendas direto na planilha original.</div>
     <p class="dica" id="dicaExemplo">Sem a planilha aqui? <a href="exemplo/Faturamento-exemplo.xlsx" download>Baixe a planilha de exemplo</a> e use o modo demonstração (⚙︎).</p>
   </section>
 
@@ -84,6 +88,7 @@
   <div class="barra-botoes">
     <button class="btn" id="btnBaixar">Baixar</button>
     <button class="btn primario" id="btnCompartilhar">Salvar / Abrir no Excel</button>
+    <button class="btn primario" id="btnSalvarOriginal" hidden>Salvar na original</button>
   </div>
 </div>
 
@@ -101,6 +106,20 @@
       <input type="url" id="cfgProxy" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://vmpay-proxy.SEU-USUARIO.workers.dev">
     </label>
     <p class="dica">A API da VMpay não aceita chamadas vindas de navegador (CORS). O proxy (Cloudflare Worker, grátis) repassa a chamada. Veja o guia no repositório.</p>
+    <h3 class="sec">Conta Microsoft <small>(para salvar na planilha original)</small></h3>
+    <label>ID do aplicativo (client ID)
+      <input type="text" id="cfgClient" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="00000000-0000-0000-0000-000000000000">
+    </label>
+    <label>ID do locatário (tenant) <small>— opcional; vazio = qualquer conta Microsoft</small>
+      <input type="text" id="cfgTenant" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="vazio">
+    </label>
+    <p class="dica">Endereço de redirecionamento para cadastrar no aplicativo: <code id="cfgRedirect"></code></p>
+    <p class="dica" id="cfgConta"></p>
+    <div class="dlg-botoes" style="justify-content:flex-start;margin-top:0">
+      <button class="btn" id="cfgEntrar" hidden>Entrar com a Microsoft</button>
+      <button class="btn" id="cfgSair" hidden>Sair da conta</button>
+    </div>
+    <h3 class="sec">Testes</h3>
     <label class="opcao"><input type="checkbox" id="cfgDemo"> <span><b>Modo demonstração</b><br><small>Usa vendas inventadas, sem token e sem proxy</small></span></label>
     <div class="dlg-botoes">
       <button class="btn" value="cancelar" formnovalidate>Cancelar</button>
